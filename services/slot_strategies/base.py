@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
-from backend.models.team import Team
-from backend.models.player import Player
+
+from core.player import Player
+from core.team import Team
+
 
 class SlotValidationStrategy(ABC):
     @abstractmethod

@@ -1,8 +1,8 @@
 import random
 from typing import List, Optional
-from backend.models.enums import PlayerRole
-from backend.models.player import Player
 from core.caller import Caller
+from core.enums import PlayerRole
+from core.player import Player
 from services.calling_strategy.base import CallingStrategy
 
 

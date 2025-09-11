@@ -1,6 +1,6 @@
 import random
 from typing import List, Optional
-from backend.models.player import Player
+from core.player import Player
 from services.calling_strategy.base import CallingStrategy
 
 

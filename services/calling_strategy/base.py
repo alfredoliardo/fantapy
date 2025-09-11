@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
-
-from backend.models.player import Player
 from core.caller import Caller
 
 

@@ -1,4 +1,4 @@
-from backend.models.enums import PlayerRole
+from core.enums import PlayerRole
 from services.slot_strategies.base import SlotValidationStrategy
 
 class DefaultSlotValidation(SlotValidationStrategy):

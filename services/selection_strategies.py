@@ -3,8 +3,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 import random
 
-from backend.models.enums import PlayerRole
-from backend.models.player import Player
+from core.player import Player
 
 class SelectionStrategy(ABC):
     @abstractmethod

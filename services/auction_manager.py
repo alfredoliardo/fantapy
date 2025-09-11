@@ -1,9 +1,9 @@
 from typing import Dict, Optional, List
-from backend.models.auction import Auction
-from backend.models.team import Team
-from backend.models.player import Player
-from backend.models.enums import PlayerRole
 import uuid
+
+from core.auction import Auction
+from core.enums import PlayerRole
+from core.player import Player
 
 class AuctionManager:
     def __init__(self):

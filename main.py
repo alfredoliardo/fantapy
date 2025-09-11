@@ -1,78 +1,87 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import asyncio
-from typing import Dict, List
+import random
+import tkinter as tk
+from tkinter import messagebox
+import uuid
 
-app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # in sviluppo apri tutto, poi restringi
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+from core.auction import Auction
+from core.caller import Caller, SystemCaller, TeamCaller
+from core.enums import PlayerRole
+from core.player import Player
 
-# Stato in memoria (MVP, poi SQLite)
-auctions: Dict[str, dict] = {}
-connections: Dict[str, List[WebSocket]] = {}
+class AuctionApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Auction Manager")
 
-@app.post("/create_auction")
-async def create_auction(params: dict):
-    auction_id = f"auction_{len(auctions)+1}"
-    auctions[auction_id] = {
-        "params": params,
-        "participants": {},
-        "current_player": None,
-        "bids": [],
-        "status": "waiting"
-    }
-    connections[auction_id] = []
-    return {"auction_id": auction_id}
+        # Frame impostazioni iniziali
+        self.setup_frame = tk.Frame(root)
+        self.setup_frame.pack(padx=10, pady=10)
 
-@app.websocket("/ws/{auction_id}/{user}")
-async def websocket_endpoint(ws: WebSocket, auction_id: str, user: str):
-    await ws.accept()
-    connections[auction_id].append(ws)
-    try:
-        while True:
-            data = await ws.receive_json()
-            if data["type"] == "join":
-                auctions[auction_id]["participants"][user] = {
-                    "budget": auctions[auction_id]["params"].get("budget", 500),
-                    "squad": []
-                }
-                await broadcast(auction_id, {"type": "user_joined", "user": user})
+        tk.Label(self.setup_frame, text="Partecipanti (separati da virgola):").pack(anchor="w")
+        self.entry_teams = tk.Entry(self.setup_frame, width=40)
+        self.entry_teams.pack(pady=5)
 
-            elif data["type"] == "start_player":
-                player = data["player"]
-                auctions[auction_id]["current_player"] = player
-                auctions[auction_id]["bids"] = []
-                await broadcast(auction_id, {"type": "player_started", "player": player})
+        tk.Label(self.setup_frame, text="Budget iniziale:").pack(anchor="w")
+        self.entry_budget = tk.Entry(self.setup_frame, width=20)
+        self.entry_budget.insert(0, "500")
+        self.entry_budget.pack(pady=5)
 
-            elif data["type"] == "bid":
-                bid = {"user": user, "amount": data["amount"]}
-                auctions[auction_id]["bids"].append(bid)
-                await broadcast(auction_id, {"type": "new_bid", "bid": bid})
+        self.start_button = tk.Button(self.setup_frame, text="Crea Asta", command=self.create_auction)
+        self.start_button.pack(pady=10)
 
-            elif data["type"] == "end_player":
-                # assegna al miglior offerente
-                if auctions[auction_id]["bids"]:
-                    winner = max(auctions[auction_id]["bids"], key=lambda x: x["amount"])
-                    auctions[auction_id]["participants"][winner["user"]]["budget"] -= winner["amount"]
-                    auctions[auction_id]["participants"][winner["user"]]["squad"].append({
-                        "player": auctions[auction_id]["current_player"],
-                        "price": winner["amount"]
-                    })
-                    await broadcast(auction_id, {"type": "player_assigned", "winner": winner})
-                auctions[auction_id]["current_player"] = None
-                auctions[auction_id]["bids"] = []
-    except WebSocketDisconnect:
-        connections[auction_id].remove(ws)
+        # Frame gestione asta
+        self.auction_frame = tk.Frame(root)
 
-async def broadcast(auction_id: str, message: dict):
-    for conn in connections[auction_id]:
-        await conn.send_json(message)
+        self.next_turn_button = tk.Button(self.auction_frame, text="Prossimo Turno", command=self.next_turn)
+        self.next_turn_button.pack(pady=5)
+
+        self.text_area = tk.Text(self.auction_frame, width=50, height=15, state="disabled")
+        self.text_area.pack(pady=5)
+
+        self.auction = None
+
+    def create_auction(self):
+        teams = [t.strip() for t in self.entry_teams.get().split(",") if t.strip()]
+        budget = self.entry_budget.get()
+
+        if not teams:
+            messagebox.showerror("Errore", "Inserisci almeno un partecipante.")
+            return
+
+        # Caller: tutti i team + system
+        callers = [TeamCaller(team) for team in teams]
+        callers.append(SystemCaller())
+
+        # Lista giocatori demo
+        players = [Player(player_id=i,name=f"Giocatore {i}", role=random.choice(list(PlayerRole)), realTeam="Team {i}") for i in range(1, 11)]
+
+        # Crea asta
+        self.auction = Auction(auction_id=str(uuid.uuid4()), name="FANTAVALLONE 2025/26",players=players)
+        self.auction.subscribe(self.handle_event)
+
+        # Switch UI
+        self.setup_frame.pack_forget()
+        self.auction_frame.pack(padx=10, pady=10)
+
+        self.log(f"Asta creata con {len(teams)} team e budget {budget}")
+
+    def next_turn(self):
+        if self.auction:
+            self.auction.next_turn()
+        else:
+            messagebox.showerror("Errore", "Crea prima un'asta.")
+
+    def handle_event(self, event):
+        self.log(f"EVENTO: {event.type} → {event.payload}")
+
+    def log(self, message):
+        self.text_area.config(state="normal")
+        self.text_area.insert(tk.END, message + "\n")
+        self.text_area.see(tk.END)
+        self.text_area.config(state="disabled")
+
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    root = tk.Tk()
+    app = AuctionApp(root)
+    root.mainloop()
