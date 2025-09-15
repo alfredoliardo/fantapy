@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from typing import Dict
 
+from core.auction import Auction
 from core.caller import Caller
 from core.player import Player
 
@@ -12,8 +13,15 @@ class AuctionEvent:
 
 
 @dataclass
+class AuctionStarted(AuctionEvent):
+    auction: Auction
+    type:str = field(init=False, default="auction_started")
+    def __post_init__(self):
+        self.payload = {"auction_id": self.auction.auction_id}
+
+@dataclass
 class TurnStarted(AuctionEvent):
-    caller: Caller = None
+    caller: Caller
     type: str = field(init=False, default="turn_started")
 
     def __post_init__(self):
@@ -22,7 +30,7 @@ class TurnStarted(AuctionEvent):
 
 @dataclass
 class PlayerCalled(AuctionEvent):
-    player: Player = None
+    player: Player
     type: str = field(init=False, default="player_called")
 
     def __post_init__(self):

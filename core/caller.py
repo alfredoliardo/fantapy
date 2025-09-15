@@ -1,38 +1,38 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+from fastapi import WebSocket
+
 from core.player import Player
 
 
 
 class Caller(ABC):
-    def __init__(self, name:str):
-        self.name = name
+    """Entità che può chiamare un giocatore all'asta."""
+
+    def __init__(self, name: str):
+        self._name = name
+
+    @property
+    def name(self) -> str:
+        return self._name
     
     @abstractmethod
-    def choose_player(self, available_players: List[Player]) -> Optional[Player]:
+    async def choose_player(self, player_pool:List[Player]) -> Optional[Player]:
         pass
 
-class SystemCaller(Caller):
-    def __init__(self):
-        super().__init__("system")        
-    
-    def choose_player(self, available_players: List[Player]) -> Optional[Player]:
-        import random
-        return random.choice(available_players) if available_players else None
-    
-class TeamCaller(Caller):
-    def __init__(self, team_name: str):
-        super().__init__(team_name)
+class WebSocketCaller(Caller):
+    def __init__(self, name: str, websocket: WebSocket):
+        super().__init__(name)
+        self.websocket = websocket
 
-    def choose_player(self, available_players: List[Player]) -> Optional[Player]:
-        # qui potresti usare input o logica web
-        print(f"{self.name} deve scegliere un giocatore")
-        return available_players[0] if available_players else None
-    
-class HostCaller(Caller):
-    def __init__(self, host_name:str):
-        super().__init__(host_name)
-    
-    def choose_player(self, available_players: List[Player]) -> Player | None:
-        return super().choose_player(available_players)
+    async def choose_player(self, player_pool: List[Player]) -> Optional[Player]:
+        # Mando la richiesta al client remoto
+        await self.websocket.send_json({
+            "type": "choose_player",
+            "options": player_pool
+        })
+        # Aspetto la risposta del client
+        data = await self.websocket.receive_json()
+
+        return data.get("player")
