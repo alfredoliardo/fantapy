@@ -1,17 +1,46 @@
+from typing import Dict, List, Optional
+from core.budget_strategies import BudgetStrategy
+from core.enums import PlayerRole
+from core.ownership_policies import OwnershipPolicy
+from core.player import Player
+
+
 class Team:
-    def __init__(self, team_id:int, name:str, budget:float) -> None:
-        self.team_id = team_id
+    def __init__(self, team_id: str, name: str,
+                 budget_strategy: BudgetStrategy,
+                 ownership_policy: OwnershipPolicy):
+        self.id = team_id
         self.name = name
-        self.budget = budget
+        self.spent:float= 0
+        self.roster: List[Player] = []
+        self.budget_strategy = budget_strategy
+        self.ownership_policy = ownership_policy
 
-        self.players = []
-    
-    def add_player(self, player, price: float):
-        # controllo budget
-        if price > self.budget:
-            raise ValueError("Budget insufficiente")
-        self.players.append((player, price))
-        self.budget -= price
+    def add_player(self, player: Player, price: float) -> None:
+        # 👇 Delego ai policy, NON hardcode
+        if not self.ownership_policy.can_own(self, player):
+            raise ValueError(f"{self.name} non può possedere altre copie di {player.name}")
+        if not self.budget_strategy.can_afford(self, player, price):
+            raise ValueError(f"{self.name} non può permettersi {player.name} a {price}")
 
-    def __repr__(self):
-        return f"<Team {self.team_id}: {self.name}, budget rimasto {self.budget}>"
+        self.roster.append(player)
+        self.budget_strategy.apply_purchase(self, player, price)
+
+    # Utility robuste
+    def has_player(self, player: Player) -> bool:
+        return any(p.player_id == player.player_id for p in self.roster)
+
+    def player_count(self, player: Player) -> int:
+        return sum(1 for p in self.roster if p.player_id == player.player_id)
+
+    def count_by_role(self, role: PlayerRole) -> int:
+        return sum(1 for p in self.roster if p.role == role)
+
+    def get_roster_by_role(self) -> Dict[PlayerRole, List[Player]]:
+        grouped: Dict[PlayerRole, List[Player]] = {}
+        for p in self.roster:
+            grouped.setdefault(p.role, []).append(p)
+        return grouped
+
+    def __repr__(self) -> str:
+        return f"<Team {self.name} spent={self.spent} size={len(self.roster)}>"

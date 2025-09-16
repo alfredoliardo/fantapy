@@ -1,0 +1,2 @@
+una piattaforma che dà la possibilità di organizzare aste di fantacalcio.
+lo scopo di un asta è quello di costruire le rose delle squadre che compongono la lega di fantacalcio.

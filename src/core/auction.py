@@ -1,10 +1,12 @@
 from typing import Dict, List, Optional
 from core.auctioneer import IAuctioneer
 from core.bid import Bid
+from core.budget_strategies import BudgetStrategy
 from core.caller import Caller
 from core.calling_strategy.base import CallingStrategy
 from core.enums import PlayerRole
 from core.events import AuctionEvent, AuctionStarted, BidPlaced, ParticipantJoined, PlayerCalled, TurnStarted
+from core.market_rules import MarketRule
 from core.participant import GuestParticipant, IParticipant, TeamParticipant
 from core.player import Player
 from core.slot_strategies.base import SlotValidationStrategy
@@ -16,9 +18,10 @@ class Auction:
     def __init__(
         self,
         auction_id:str,
-        name:str,        
-        participants:int = 8,
-        initial_budget:float = 1000,
+        name:str,
+        budget_strategy:BudgetStrategy,
+        market_rules:MarketRule,        
+        teams:int = 8,
         players:List[Player] = [
              Player(1,"Davis K.", PlayerRole.A, "Udinese"),
              Player(2,"Paz N.", PlayerRole.C, "Como"),
@@ -32,8 +35,6 @@ class Auction:
         self.participants:Dict[int,IParticipant] = {}
         self.auction_id = auction_id
         self.name = name
-
-        self.teams = [Team(team_id=i,name=f"Team {i+1}", budget=self.initial_budget) for i in range(participants)]
 
         self.initial_budget = initial_budget
         self.player_pool:List[Player] = players
@@ -87,7 +88,10 @@ class Auction:
         #il chiamante seleziona un giocatore da mettere all'asta
         #self.current_player = await self.current_caller.choose_player(self.player_pool)
 
-                
+    def set_calling_strategy(self,strategy:CallingStrategy):
+        self.calling_strategy = strategy
+
+          
     def place_bid(self, team: Team, amount: int) -> Optional[AuctionEvent]:
             if not self.current_player:
                 return None
