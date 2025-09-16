@@ -1,0 +1,29 @@
+{
+  "modes": {
+    "team_driven": {
+      "bidding_strategy": ["free", "poker", "closed_bid"],
+      "team_building": ["fixed_max", "min_max", "free"],
+      "market_rule": ["unique", "multi_copy"],
+      "ownership_policy": ["no_duplicates", "max_clones"],
+      "budget_strategy": ["limited", "unlimited"],
+      "pool_builder": ["free", "role_sequential", "team_needs"]
+    },
+    "system_driven": {
+      "bidding_strategy": ["free", "closed_bid"],
+      "team_building": ["fixed_max", "min_max"],
+      "market_rule": ["unique", "multi_copy"],
+      "ownership_policy": ["no_duplicates"],
+      "budget_strategy": ["limited"],
+      "pool_builder": ["role_sequential", "team_needs"],
+      "system.selection_strategy": ["random", "alphabetical", "value_based"]
+    },
+    "host_driven": {
+      "bidding_strategy": ["free", "poker"],
+      "team_building": ["free", "fixed_max"],
+      "market_rule": ["unique"],
+      "ownership_policy": ["no_duplicates"],
+      "budget_strategy": ["limited", "unlimited"],
+      "pool_builder": ["free"]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "mode": "system_driven",
+  "team_building": "min_max",
+  "market_rule": "multi_copy",
+  "ownership_policy": "no_duplicates",
+  "budget_strategy": "limited",
+  "bidding_strategy": "closed_bid",
+  "pool_builder": "role_sequential",
+  "system.selection_strategy": "alphabetical",
+  "teams": [
+    {"id": "t1", "name": "Team A", "budget": 500},
+    {"id": "t2", "name": "Team B", "budget": 500}
+  ]
+}
