@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Auction Demo</title>
+</head>
+<body>
+  <h1>Auction Client</h1>
+  <input id="auctionId" placeholder="Auction ID"/>
+  <button onclick="connect()">Connect</button>
+  <br><br>
+  <input id="messageText" placeholder="Message"/>
+  <button onclick="sendMessage()">Send</button>
+  <ul id="messages"></ul>
+
+  <script>
+    let ws;
+
+    function connect() {
+      const auctionId = document.getElementById("auctionId").value;
+      ws = new WebSocket(`ws://localhost:8000/ws/${auctionId}`);
+      ws.onmessage = (event) => {
+        const li = document.createElement("li");
+        li.textContent = event.data;
+        document.getElementById("messages").appendChild(li);
+      };
+    }
+
+    function sendMessage() {
+      const input = document.getElementById("messageText");
+      ws.send(input.value);
+      input.value = "";
+    }
+  </script>
+</body>
+</html>

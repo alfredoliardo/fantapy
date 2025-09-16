@@ -1,10 +1,14 @@
 # core/auctioneer.py
+from abc import ABC
 import threading
 import time
 from typing import Callable, Optional
 
 from core.player import Player
 from core.team import Team
+
+class IAuctioneer(ABC):
+    pass
 
 class Auctioneer:
     def __init__(self, countdown_seconds: int = 10, tick_callback: Optional[Callable] = None):

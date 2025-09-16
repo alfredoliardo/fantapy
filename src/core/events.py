@@ -4,6 +4,7 @@ from typing import Dict
 
 from core.auction import Auction
 from core.caller import Caller
+from core.participant import IParticipant
 from core.player import Player
 
 @dataclass
@@ -18,6 +19,10 @@ class AuctionStarted(AuctionEvent):
     type:str = field(init=False, default="auction_started")
     def __post_init__(self):
         self.payload = {"auction_id": self.auction.auction_id}
+
+@dataclass
+class ParticipantJoined(AuctionEvent):
+    participant: IParticipant
 
 @dataclass
 class TurnStarted(AuctionEvent):
