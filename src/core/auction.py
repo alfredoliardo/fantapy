@@ -1,17 +1,18 @@
 from typing import Dict, List, Optional
 from core.auctioneer import IAuctioneer
 from core.bid import Bid
-from core.budget_strategies import BudgetStrategy
+from core.budget_strategies import BudgetStrategy, LimitedBudgetStrategy
 from core.caller import Caller
 from core.calling_strategy.base import CallingStrategy
 from core.enums import PlayerRole
 from core.events import AuctionEvent, AuctionStarted, BidPlaced, ParticipantJoined, PlayerCalled, TurnStarted
-from core.market_rules import MarketRule
+from core.market_rules import MarketRule, UniquePlayerMarket
+from core.ownership_policies import NoDuplicatesOwnershipPolicy, OwnershipPolicy
 from core.participant import GuestParticipant, IParticipant, TeamParticipant
 from core.player import Player
-from core.slot_strategies.base import SlotValidationStrategy
-from core.slot_strategies.default import DefaultSlotValidation
 from core.team import Team
+from core.team_building_strategies.base import TeamBuildingStrategy
+from core.team_building_strategies.fixed_max_strategy import FixedMaxStrategy
 
 
 class Auction:
@@ -19,16 +20,25 @@ class Auction:
         self,
         auction_id:str,
         name:str,
-        budget_strategy:BudgetStrategy,
-        market_rules:MarketRule,        
+        budget_strategy:BudgetStrategy = LimitedBudgetStrategy(1000),
+        market_rules:MarketRule = UniquePlayerMarket(),
+        ownership_policy:OwnershipPolicy = NoDuplicatesOwnershipPolicy(),
+        team_building_strategy:TeamBuildingStrategy = FixedMaxStrategy(
+            {
+                 PlayerRole.P: 3,
+                 PlayerRole.D: 8,
+                 PlayerRole.C: 8,
+                 PlayerRole.A: 6,
+            }
+        ),        
         teams:int = 8,
         players:List[Player] = [
              Player(1,"Davis K.", PlayerRole.A, "Udinese"),
              Player(2,"Paz N.", PlayerRole.C, "Como"),
              Player(3,"Mina", PlayerRole.D, "Cagliari"),
              Player(4,"Svilar", PlayerRole.P, "Roma"),
-        ],
-        slot_strategy:SlotValidationStrategy = DefaultSlotValidation(),     
+        ]
+             
     ) -> None:
     
         
@@ -36,7 +46,12 @@ class Auction:
         self.auction_id = auction_id
         self.name = name
 
-        self.initial_budget = initial_budget
+        self.budget_strategy = budget_strategy
+        self.market_rule = market_rules
+        self.ownership_policy = ownership_policy
+        self.team_building_strategy = team_building_strategy
+
+        self.teams:Dict[int, Team] = self._generate_teams(teams, self.budget_strategy, self.ownership_policy)
         self.player_pool:List[Player] = players
 
 
@@ -48,6 +63,17 @@ class Auction:
         #self.calling_strategy = calling_strategy
         self.callers = []
         self.subscribers = []
+
+    def _generate_teams(self, n: int, budget_strategy: BudgetStrategy, ownership_policy: OwnershipPolicy) -> dict[int, Team]:
+        return {
+            i: Team(
+                team_id=str(i),
+                name=f"Team {i}",
+                budget_strategy=budget_strategy,
+                ownership_policy=ownership_policy
+            )
+            for i in range(1, n + 1)
+        }
 
     def subscribe(self, callback):
         self.subscribers.append(callback)
@@ -91,13 +117,4 @@ class Auction:
     def set_calling_strategy(self,strategy:CallingStrategy):
         self.calling_strategy = strategy
 
-          
-    def place_bid(self, team: Team, amount: int) -> Optional[AuctionEvent]:
-            if not self.current_player:
-                return None
-            if amount > self.current_bid and team.budget >= amount:
-                self.current_bid = amount
-                self.current_bidder = team
-                return BidPlaced(team=team.name, amount=amount)
-            return None
     

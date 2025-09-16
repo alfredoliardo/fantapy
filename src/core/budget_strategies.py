@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from core.player import Player
-from core.team import Team
-
+if TYPE_CHECKING:
+    from core.team import Team  # solo per type hints
+    
 class BudgetStrategy(ABC):
     @abstractmethod
     def can_afford(self, team: Team, player: Player, price: float) -> bool:
