@@ -2,8 +2,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from core.player import Player
-if TYPE_CHECKING:
-    from core.team import Team  # solo per type hints
+from core.team import Team  # solo per type hints
     
 class BudgetStrategy(ABC):
     @abstractmethod

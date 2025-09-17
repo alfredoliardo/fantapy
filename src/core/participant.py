@@ -39,6 +39,26 @@ class IInteractiveParticipant(IParticipant):
     def caller(self) -> Caller: ...
  
 
+class HostParticipant(IInteractiveParticipant):
+    def __init__(self, id, name):
+        self._id = id
+        self._name = name
+
+    @property
+    def id(self) -> int:
+        return self._id
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def get_label(self) -> str:
+        return f"Host: {self._name}"
+
+    @property
+    def caller(self) -> Caller:
+        raise NotImplementedError
+
+
 class TeamParticipant(IInteractiveParticipant):
     """Partecipante associato a un Team reale."""
 

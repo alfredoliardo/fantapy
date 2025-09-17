@@ -1,30 +1,17 @@
 from typing import Dict, List, Optional
-from core.budget_strategies import BudgetStrategy
 from core.enums import PlayerRole
-from core.ownership_policies import OwnershipPolicy
 from core.player import Player
 
 
 class Team:
-    def __init__(self, team_id: str, name: str,
-                 budget_strategy: BudgetStrategy,
-                 ownership_policy: OwnershipPolicy):
+    def __init__(self, team_id: str, name: str):
         self.id = team_id
         self.name = name
         self.spent:float= 0
         self.roster: List[Player] = []
-        self.budget_strategy = budget_strategy
-        self.ownership_policy = ownership_policy
 
     def add_player(self, player: Player, price: float) -> None:
-        # 👇 Delego ai policy, NON hardcode
-        if not self.ownership_policy.can_own(self, player):
-            raise ValueError(f"{self.name} non può possedere altre copie di {player.name}")
-        if not self.budget_strategy.can_afford(self, player, price):
-            raise ValueError(f"{self.name} non può permettersi {player.name} a {price}")
-
         self.roster.append(player)
-        self.budget_strategy.apply_purchase(self, player, price)
 
     # Utility robuste
     def has_player(self, player: Player) -> bool:

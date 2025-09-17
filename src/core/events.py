@@ -2,60 +2,83 @@
 from dataclasses import dataclass, field
 from typing import Dict
 
-from core.auction import Auction
-from core.caller import Caller
-from core.participant import IParticipant
-from core.player import Player
 
 @dataclass
 class AuctionEvent:
     type: str
-    payload: Dict = field(init=False)   # non viene richiesto all'init
+    payload: Dict = field(init=False)  # popolato in __post_init__ dai figli
 
 
 @dataclass
 class AuctionStarted(AuctionEvent):
-    auction: Auction
-    type:str = field(init=False, default="auction_started")
+    auction_id: str
+    type: str = field(init=False, default="auction_started")
+
     def __post_init__(self):
-        self.payload = {"auction_id": self.auction.auction_id}
+        self.payload = {"auction_id": self.auction_id}
+
 
 @dataclass
 class ParticipantJoined(AuctionEvent):
-    participant: IParticipant
+    participant_id: int
+    name: str
+    type: str = field(init=False, default="participant_joined")
+
+    def __post_init__(self):
+        self.payload = {"id": self.participant_id, "name": self.name}
+
 
 @dataclass
 class TurnStarted(AuctionEvent):
-    caller: Caller
+    caller_name: str
     type: str = field(init=False, default="turn_started")
 
     def __post_init__(self):
-        self.payload = {"caller": self.caller.name}
+        self.payload = {"caller": self.caller_name}
 
 
 @dataclass
 class PlayerCalled(AuctionEvent):
-    player: Player
+    player_id: str
+    player_name: str
+    role: str
     type: str = field(init=False, default="player_called")
 
     def __post_init__(self):
-        self.payload = {"player": self.player.name, "role": self.player.role}
+        self.payload = {
+            "player_id": self.player_id,
+            "player": self.player_name,
+            "role": self.role,
+        }
+
 
 @dataclass
 class BidPlaced(AuctionEvent):
-    type: str = "bid_placed"
-    team: str = ""
-    amount: int = 0
+    team_id: str
+    team_name: str
+    amount: int
+    type: str = field(init=False, default="bid_placed")
 
     def __post_init__(self):
-        self.payload = {"team": self.team, "amount": self.amount}
+        self.payload = {
+            "team_id": self.team_id,
+            "team": self.team_name,
+            "amount": self.amount,
+        }
 
 
 @dataclass
 class PlayerAssigned(AuctionEvent):
-    type: str = "player_assigned"
-    team: str = ""
-    player: str = ""
+    team_id: str
+    team_name: str
+    player_id: str
+    player_name: str
+    type: str = field(init=False, default="player_assigned")
 
     def __post_init__(self):
-        self.payload = {"team": self.team, "player": self.player}
+        self.payload = {
+            "team_id": self.team_id,
+            "team": self.team_name,
+            "player_id": self.player_id,
+            "player": self.player_name,
+        }

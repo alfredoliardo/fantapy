@@ -20,7 +20,8 @@ from core.auction import Auction   # ⚠️ importa correttamente Auction dal tu
 async def test_create_auction_and_generate_teams():
     auction = Auction(
         auction_id="test-auction",
-        name="Test Auction",
+        auction_name="Test Auction",
+        host_name="alfredo",
         budget_strategy=LimitedBudgetStrategy(1000),
         market_rules=UniquePlayerMarket(),
         ownership_policy=NoDuplicatesOwnershipPolicy(),
@@ -42,7 +43,7 @@ async def test_create_auction_and_generate_teams():
 
 @pytest.mark.asyncio
 async def test_join_participant_publishes_event():
-    auction = Auction("a1", "Auction test")
+    auction = Auction("a1", "Auction test","alfredo")
 
     published_events = []
     auction.subscribe(lambda e: published_events.append(e))
@@ -56,7 +57,7 @@ async def test_join_participant_publishes_event():
 
 @pytest.mark.asyncio
 async def test_assign_team_converts_guest_to_team_participant():
-    auction = Auction("a2", "Auction test 2")
+    auction = Auction("a2", "Auction test 2", "alfredo")
     p = await auction.join("Luigi")
 
     team = next(iter(auction.teams.values()))
@@ -74,7 +75,7 @@ async def test_assign_team_converts_guest_to_team_participant():
 
 @pytest.mark.asyncio
 async def test_start_auction_publishes_event():
-    auction = Auction("a3", "Auction test 3")
+    auction = Auction("a3", "Auction test 3", "alfredo")
 
     published_events = []
     auction.subscribe(lambda e: published_events.append(e))

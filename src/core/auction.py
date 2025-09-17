@@ -8,7 +8,7 @@ from core.enums import PlayerRole
 from core.events import AuctionEvent, AuctionStarted, BidPlaced, ParticipantJoined, PlayerCalled, TurnStarted
 from core.market_rules import MarketRule, UniquePlayerMarket
 from core.ownership_policies import NoDuplicatesOwnershipPolicy, OwnershipPolicy
-from core.participant import GuestParticipant, IParticipant, TeamParticipant
+from core.participant import GuestParticipant, HostParticipant, IParticipant, TeamParticipant
 from core.player import Player
 from core.team import Team
 from core.team_building_strategies.base import TeamBuildingStrategy
@@ -19,7 +19,8 @@ class Auction:
     def __init__(
         self,
         auction_id:str,
-        name:str,
+        auction_name:str,
+        host_name:str,
         budget_strategy:BudgetStrategy = LimitedBudgetStrategy(1000),
         market_rules:MarketRule = UniquePlayerMarket(),
         ownership_policy:OwnershipPolicy = NoDuplicatesOwnershipPolicy(),
@@ -44,14 +45,15 @@ class Auction:
         
         self.participants:Dict[int,IParticipant] = {}
         self.auction_id = auction_id
-        self.name = name
+        self.name = auction_name
+        self.host:HostParticipant = HostParticipant(0,host_name)
 
         self.budget_strategy = budget_strategy
         self.market_rule = market_rules
         self.ownership_policy = ownership_policy
         self.team_building_strategy = team_building_strategy
 
-        self.teams:Dict[int, Team] = self._generate_teams(teams, self.budget_strategy, self.ownership_policy)
+        self.teams:Dict[int, Team] = self._generate_teams(teams)
         self.player_pool:List[Player] = players
 
 
@@ -64,13 +66,11 @@ class Auction:
         self.callers = []
         self.subscribers = []
 
-    def _generate_teams(self, n: int, budget_strategy: BudgetStrategy, ownership_policy: OwnershipPolicy) -> dict[int, Team]:
+    def _generate_teams(self, n: int) -> dict[int, Team]:
         return {
             i: Team(
                 team_id=str(i),
-                name=f"Team {i}",
-                budget_strategy=budget_strategy,
-                ownership_policy=ownership_policy
+                name=f"Team {i}"
             )
             for i in range(1, n + 1)
         }
@@ -88,7 +88,7 @@ class Auction:
         new_participant:GuestParticipant = GuestParticipant(new_id,name)
         self.participants[new_id] = new_participant
 
-        self._publish(ParticipantJoined("participant_joined", participant=new_participant))
+        self._publish(ParticipantJoined(participant_id=new_id, name=name))
         return new_participant
     
     async def assign_team(self, participant_id:int, team:Team, caller:Caller):
@@ -99,7 +99,7 @@ class Auction:
         self.participants[p.id] = team_participant
 
     async def start_auction(self):
-        self._publish(AuctionStarted(self))
+        self._publish(AuctionStarted(self.auction_id))
         await self.next_turn()
         pass
 
