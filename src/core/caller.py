@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from fastapi import WebSocket
 
+from core.bidding_strategies import BiddingStrategy
 from core.player import Player
 
 
@@ -21,6 +22,9 @@ class Caller(ABC):
     async def choose_player(self, player_pool:List[Player]) -> Optional[Player]:
         pass
 
+    @abstractmethod
+    async def choose_bidding_strategy(self) -> BiddingStrategy:...
+
 class WebSocketCaller(Caller):
     def __init__(self, name: str, websocket: WebSocket):
         super().__init__(name)
@@ -36,3 +40,8 @@ class WebSocketCaller(Caller):
         data = await self.websocket.receive_json()
 
         return data.get("player")
+
+    async def choose_bidding_strategy(self):
+        raise NotImplementedError
+
+    

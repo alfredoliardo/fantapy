@@ -1,0 +1,7 @@
+[project]
+name = "fantapy"
+version = "0.1.0"
+
+[tool.setuptools]
+packages = ["core", "api"]
+package-dir = {"" = "src"}

@@ -10,9 +10,12 @@ from core.market_rules import MarketRule, UniquePlayerMarket
 from core.ownership_policies import NoDuplicatesOwnershipPolicy, OwnershipPolicy
 from core.participant import GuestParticipant, HostParticipant, IParticipant, TeamParticipant
 from core.player import Player
+from core.player_pool_builders.base import PlayerPoolBuilder
+from core.player_pool_builders.role_sequential_pool_builder import RoleSequentialPoolBuilder
 from core.team import Team
 from core.team_building_strategies.base import TeamBuildingStrategy
 from core.team_building_strategies.fixed_max_strategy import FixedMaxStrategy
+from core.turn import Turn
 
 
 class Auction:
@@ -21,6 +24,8 @@ class Auction:
         auction_id:str,
         auction_name:str,
         host_name:str,
+        teams:int = 8,
+
         budget_strategy:BudgetStrategy = LimitedBudgetStrategy(1000),
         market_rules:MarketRule = UniquePlayerMarket(),
         ownership_policy:OwnershipPolicy = NoDuplicatesOwnershipPolicy(),
@@ -32,7 +37,6 @@ class Auction:
                  PlayerRole.A: 6,
             }
         ),        
-        teams:int = 8,
         players:List[Player] = [
              Player(1,"Davis K.", PlayerRole.A, "Udinese"),
              Player(2,"Paz N.", PlayerRole.C, "Como"),
@@ -42,10 +46,19 @@ class Auction:
              
     ) -> None:
     
+<<<<<<< HEAD
         
         self.auction_id = auction_id
         self.name = auction_name        
+=======
+        self.player_pool_builder:PlayerPoolBuilder = RoleSequentialPoolBuilder([PlayerRole.P,PlayerRole.D,PlayerRole.C,PlayerRole.A], self.team_building_strategy)
+        self.participants:Dict[int,IParticipant] = {}
+        self.auction_id = auction_id
+        self.name = auction_name
+
+>>>>>>> 5929443 (turn)
         self.host:HostParticipant = HostParticipant(0,host_name)
+        self.participants[self.host.id] = self.host
 
         self.participants:Dict[int,IParticipant] = {}
 
@@ -63,6 +76,9 @@ class Auction:
         self.current_player:Optional[Player] = None
         self.current_bids:List[Bid] = []
         self.best_bid:Optional[Bid] = None
+
+        self.turns: List[Turn] = []
+        self.current_turn: Optional[Turn] = None
 
         #self.calling_strategy = calling_strategy
         self.callers = []
@@ -102,19 +118,31 @@ class Auction:
 
     async def start_auction(self):
         self._publish(AuctionStarted(self.auction_id))
-        await self.next_turn()
+
+        turn = await self.next_turn()
+
+        self.turns.append(turn)
+
         pass
 
-    async def next_turn(self):
-        #seleziona il prossimo chiamante
-        pass
-        #self.current_caller = self.calling_strategy.next_caller()
+    async def next_turn(self) -> Turn:
+        #calcola il numero del turno
+        turn_number = len(self.turns) + 1
+
+        #crea il turno e lo ritorna
+        #ottiene il prossimo chiamante
+        caller = self.calling_strategy.next_caller()
+
+        #costruisce il pool di giocatori selezionabili
+        #player_pool = self.player_pool_builder.build_pool(self.player_pool, self.teams.items)
+        player_pool = self.player_pool
+
+
+        player = await caller.choose_player(player_pool)
+        bidding_strategy = await caller.choose_bidding_strategy()
+        
+        new_turn = Turn(turn_number, caller, player, bidding_strategy)
         #self._publish(TurnStarted(caller=self.current_caller))
-
-        #qui si potrebbe implementare la logica per preparare la player_pool
-
-        #il chiamante seleziona un giocatore da mettere all'asta
-        #self.current_player = await self.current_caller.choose_player(self.player_pool)
 
     def set_calling_strategy(self,strategy:CallingStrategy):
         self.calling_strategy = strategy
