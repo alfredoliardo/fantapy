@@ -43,10 +43,12 @@ class Auction:
     ) -> None:
     
         
-        self.participants:Dict[int,IParticipant] = {}
         self.auction_id = auction_id
-        self.name = auction_name
+        self.name = auction_name        
         self.host:HostParticipant = HostParticipant(0,host_name)
+
+        self.participants:Dict[int,IParticipant] = {}
+
 
         self.budget_strategy = budget_strategy
         self.market_rule = market_rules

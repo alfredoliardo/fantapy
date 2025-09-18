@@ -1,34 +1,192 @@
 <!DOCTYPE html>
-<html>
+<html lang="it">
 <head>
-  <title>Auction Demo</title>
-</head>
-<body>
-  <h1>Auction Client</h1>
-  <input id="auctionId" placeholder="Auction ID"/>
-  <button onclick="connect()">Connect</button>
-  <br><br>
-  <input id="messageText" placeholder="Message"/>
-  <button onclick="sendMessage()">Send</button>
-  <ul id="messages"></ul>
-
-  <script>
-    let ws;
-
-    function connect() {
-      const auctionId = document.getElementById("auctionId").value;
-      ws = new WebSocket(`ws://localhost:8000/ws/${auctionId}`);
-      ws.onmessage = (event) => {
-        const li = document.createElement("li");
-        li.textContent = event.data;
-        document.getElementById("messages").appendChild(li);
-      };
+  <meta charset="UTF-8">
+  <title>Fantapy - Client Demo</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 2rem;
+      background: #f4f4f4;
     }
 
-    function sendMessage() {
-      const input = document.getElementById("messageText");
-      ws.send(input.value);
-      input.value = "";
+    h1 { margin-bottom: 1rem; }
+
+    .container {
+      display: flex;
+      gap: 2rem;
+    }
+
+    .card {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      width: 300px;
+    }
+
+    label {
+      display: block;
+      margin-top: 0.5rem;
+    }
+
+    input {
+      width: 100%;
+      padding: 0.5rem;
+      margin-top: 0.3rem;
+    }
+
+    button {
+      margin-top: 1rem;
+      padding: 0.6rem 1rem;
+      border: none;
+      border-radius: 5px;
+      background: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+
+    #log {
+      margin-top: 2rem;
+      background: #222;
+      color: #0f0;
+      padding: 1rem;
+      height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      border-radius: 5px;
+    }
+
+    #participants {
+      margin-top: 2rem;
+      background: #fff;
+      padding: 1rem;
+      border-radius: 5px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    #participants ul {
+      list-style: none;
+      padding: 0;
+    }
+    #participants li {
+      padding: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Fantapy - Demo Client</h1>
+  <div class="container">
+    <!-- Crea Asta -->
+    <div class="card">
+      <h2>Crea Asta</h2>
+      <label>Nome Asta</label>
+      <input id="create-name" type="text" placeholder="Nome asta">
+      <label>Nickname Host</label>
+      <input id="create-nickname" type="text" placeholder="Il tuo nome">
+      <button onclick="createAuction()">Crea</button>
+    </div>
+
+    <!-- Unisciti ad Asta -->
+    <div class="card">
+      <h2>Unisciti ad Asta</h2>
+      <label>Auction ID</label>
+      <input id="join-id" type="text" placeholder="UUID dell'asta">
+      <label>Nickname</label>
+      <input id="join-nickname" type="text" placeholder="Il tuo nome">
+      <button onclick="joinAuction()">Unisciti</button>
+    </div>
+  </div>
+
+  <!-- Partecipanti -->
+  <div id="participants">
+    <h2>Utenti Connessi</h2>
+    <ul id="participants-list"></ul>
+  </div>
+
+  <div id="log"></div>
+
+  <script>
+    const API_BASE = "http://127.0.0.1:8000/auctions";
+    let ws = null;
+    let participants = [];
+
+    function log(msg) {
+      const logBox = document.getElementById("log");
+      logBox.innerHTML += msg + "<br>";
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function renderParticipants() {
+      const ul = document.getElementById("participants-list");
+      ul.innerHTML = "";
+      participants.forEach(p => {
+        const li = document.createElement("li");
+        li.textContent = `${p.name} (id: ${p.id})`;
+        ul.appendChild(li);
+      });
+    }
+
+    async function createAuction() {
+      const name = document.getElementById("create-name").value;
+      const nickname = document.getElementById("create-nickname").value;
+
+      const res = await fetch(API_BASE + "/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          nickname,
+          budget: 1000,
+          max_teams: 8
+        })
+      });
+
+      const data = await res.json();
+      log("Asta creata con ID: " + data.auction_id);
+      connectWS(data.auction_id, nickname);
+    }
+
+    function joinAuction() {
+      const auctionId = document.getElementById("join-id").value;
+      const nickname = document.getElementById("join-nickname").value;
+      connectWS(auctionId, nickname);
+    }
+
+    function connectWS(auctionId, nickname) {
+      ws = new WebSocket(`ws://127.0.0.1:8000/auctions/${auctionId}/ws`);
+
+      ws.onopen = () => {
+        log("Connesso al WS!");
+        ws.send(JSON.stringify({
+          type: "join",
+          payload: { name: nickname }
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        log("WS → " + JSON.stringify(msg));
+
+        if (msg.type === "participant_joined") {
+          participants.push(msg.payload);
+          renderParticipants();
+        }
+
+        if (msg.type === "joined") {
+          participants.push(msg.payload);
+          renderParticipants();
+        }
+      };
+
+      ws.onclose = () => {
+        log("Connessione WS chiusa");
+      };
     }
   </script>
 </body>
