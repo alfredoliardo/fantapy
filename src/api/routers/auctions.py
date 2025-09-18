@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
-from typing import Dict, List
+from typing import Dict
 import uuid
 import json
 
@@ -23,29 +23,34 @@ class AuctionCreate(BaseModel):
 # --- Connection Manager ---
 class ConnectionManager:
     def __init__(self):
-        self.active: Dict[str, List[WebSocket]] = {}
+        # auction_id -> { participant_id: websocket }
+        self.active_connections: dict[str, dict[int, WebSocket]] = {}
 
     async def connect(self, auction_id: str, ws: WebSocket):
         await ws.accept()
-        if auction_id not in self.active:
-            self.active[auction_id] = []
-        self.active[auction_id].append(ws)
+        if auction_id not in self.active_connections:
+            self.active_connections[auction_id] = {}
 
-    def disconnect(self, auction_id: str, ws: WebSocket):
-        if auction_id in self.active and ws in self.active[auction_id]:
-            self.active[auction_id].remove(ws)
+    def register(self, auction_id: str, participant_id: int, ws: WebSocket):
+        if auction_id not in self.active_connections:
+            self.active_connections[auction_id] = {}
+        self.active_connections[auction_id][participant_id] = ws
+
+    def unregister(self, auction_id: str, participant_id: int):
+        if auction_id in self.active_connections:
+            self.active_connections[auction_id].pop(participant_id, None)
 
     async def broadcast(self, auction_id: str, message: dict):
-        if auction_id not in self.active:
+        if auction_id not in self.active_connections:
             return
-        dead = []
-        for ws in self.active[auction_id]:
+        to_remove = []
+        for pid, ws in self.active_connections[auction_id].items():
             try:
                 await ws.send_json(message)
             except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self.disconnect(auction_id, ws)
+                to_remove.append(pid)
+        for pid in to_remove:
+            self.unregister(auction_id, pid)
 
 
 manager = ConnectionManager()
@@ -59,8 +64,7 @@ def create_auction(data: AuctionCreate):
     auction = Auction(
         auction_id=auction_id,
         auction_name=data.name,
-        host_name=data.nickname,
-        # budget_strategy e altro ancora possono essere passati in futuro
+        host_name=data.nickname
     )
     auctions[auction_id] = auction
     return {"auction_id": auction_id, "join_url": f"/auctions/{auction_id}/ws"}
@@ -99,7 +103,7 @@ def get_auction(auction_id: str):
 
 
 @router.websocket("/{auction_id}/ws")
-async def auction_ws(ws: WebSocket, auction_id: str, nickname:str):
+async def auction_ws(ws: WebSocket, auction_id: str):
     if auction_id not in auctions:
         await ws.close(code=1008)  # policy violation
         return
@@ -107,7 +111,7 @@ async def auction_ws(ws: WebSocket, auction_id: str, nickname:str):
     await manager.connect(auction_id, ws)
     auction = auctions[auction_id]
 
-    # Invia subito snapshot iniziale al nuovo client
+    # Invia subito snapshot iniziale
     snapshot = AuctionDTO(
         id=auction.auction_id,
         name=auction.name,
@@ -131,29 +135,46 @@ async def auction_ws(ws: WebSocket, auction_id: str, nickname:str):
         current_caller=auction.current_caller.name if auction.current_caller else None,
         current_player=auction.current_player.name if auction.current_player else None,
     )
-    await ws.send_json({"type": "auction_snapshot", "payload": snapshot.dict()})
+    await ws.send_json({"type": "auction_snapshot", "payload": snapshot.model_dump_json()})
 
-    # Broadcast a tutti che è entrato un nuovo client
-    await manager.broadcast(auction_id, {
-        "type": "participant_joined",
-        "payload": {"id": "temp", "name": nickname}
-    })
+    participant_id = None
 
     try:
         while True:
             data = await ws.receive_text()
             msg = json.loads(data)
 
-            # Qui puoi gestire i messaggi dei client
-            # Es: {"type": "place_bid", "amount": 50}
             if msg["type"] == "ping":
                 await ws.send_json({"type": "pong"})
+
+            elif msg["type"] == "join":
+                nickname = msg["payload"]["name"]
+                participant = await auction.join(nickname)
+
+                participant_id = participant.id
+                manager.register(auction_id, participant_id, ws)
+
+                await ws.send_json({
+                    "type": "joined",
+                    "payload": {"id": participant.id, "name": participant.name}
+                })
+
+                await manager.broadcast(
+                    auction_id,
+                    {
+                        "type": "participant_joined",
+                        "payload": {"id": participant.id, "name": participant.name},
+                    }
+                )
+
             else:
+                # broadcast generico
                 await manager.broadcast(auction_id, msg)
 
     except WebSocketDisconnect:
-        manager.disconnect(auction_id, ws)
-        await manager.broadcast(auction_id, {
-            "type": "participant_left",
-            "payload": {"id": "temp", "name": "anonymous"}
-        })
+        if participant_id is not None:
+            manager.unregister(auction_id, participant_id)
+            await manager.broadcast(auction_id, {
+                "type": "participant_left",
+                "payload": {"id": participant_id}
+            })

@@ -46,21 +46,12 @@ class Auction:
              
     ) -> None:
     
-<<<<<<< HEAD
         
         self.auction_id = auction_id
         self.name = auction_name        
-=======
-        self.player_pool_builder:PlayerPoolBuilder = RoleSequentialPoolBuilder([PlayerRole.P,PlayerRole.D,PlayerRole.C,PlayerRole.A], self.team_building_strategy)
-        self.participants:Dict[int,IParticipant] = {}
-        self.auction_id = auction_id
-        self.name = auction_name
-
->>>>>>> 5929443 (turn)
+        self.participants:Dict[int, IParticipant] = {}
         self.host:HostParticipant = HostParticipant(0,host_name)
-        self.participants[self.host.id] = self.host
-
-        self.participants:Dict[int,IParticipant] = {}
+        self.participants[0] = self.host
 
 
         self.budget_strategy = budget_strategy
@@ -102,7 +93,12 @@ class Auction:
 
 
     async def join(self, name:str) -> IParticipant:
+
         new_id = self.participants.__len__() + 1
+        if(self.participants.__len__() == 0):
+            self.host = HostParticipant(new_id, name)
+            return self.host
+        
         new_participant:GuestParticipant = GuestParticipant(new_id,name)
         self.participants[new_id] = new_participant
 
@@ -121,11 +117,12 @@ class Auction:
 
         turn = await self.next_turn()
 
-        self.turns.append(turn)
+       
 
         pass
 
-    async def next_turn(self) -> Turn:
+    async def next_turn(self) -> Optional[Turn]:
+        pass
         #calcola il numero del turno
         turn_number = len(self.turns) + 1
 
@@ -141,7 +138,7 @@ class Auction:
         player = await caller.choose_player(player_pool)
         bidding_strategy = await caller.choose_bidding_strategy()
         
-        new_turn = Turn(turn_number, caller, player, bidding_strategy)
+
         #self._publish(TurnStarted(caller=self.current_caller))
 
     def set_calling_strategy(self,strategy:CallingStrategy):
