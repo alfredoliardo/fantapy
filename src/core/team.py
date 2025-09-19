@@ -4,9 +4,11 @@ from core.player import Player
 
 
 class Team:
-    def __init__(self, team_id: str, name: str):
-        self.id = team_id
+    def __init__(self, id: int, name: str):
+        self.id = id
         self.name = name
+        self.president = None  # type: Optional[IParticipant]
+        self.budget:float = 500
         self.spent:float= 0
         self.roster: List[Player] = []
 

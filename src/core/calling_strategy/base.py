@@ -1,13 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional
-from core.caller import Caller
+from core.team import Team
 
 
 class CallingStrategy(ABC):
-    def __init__(self,callers:List[Caller]):
-        self.callers = callers
 
     @abstractmethod
-    def next_caller(self) -> Caller:
-        """Restituisce chi deve chiamare il prossimo giocatore"""
+    def next_caller(self) -> Team:
+        """Restituisce quale team deve chiamare il prossimo giocatore"""
         pass

@@ -207,17 +207,12 @@
           document.getElementById("caller").innerText = data.current_caller || "-";
           document.getElementById("player").innerText = data.current_player || "-";
 
-          //participants = data.participants.map((name, idx) => ({ id: idx+1, name }));
-          //renderParticipants();
+          participants = data.participants.map((name, idx) => ({ id: idx+1, name }));
+          renderParticipants();
           renderTeams(data.teams);
         }
 
         if (msg.type === "participant_joined") {
-          participants.push(data);
-          renderParticipants();
-        }
-
-        if (msg.type === "joined") {
           participants.push(data);
           renderParticipants();
         }

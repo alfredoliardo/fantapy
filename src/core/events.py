@@ -19,6 +19,15 @@ class AuctionStarted(AuctionEvent):
 
 
 @dataclass
+class CallerChanged(AuctionEvent):
+    caller_id: str
+    caller_name: str
+    type: str = field(init=False, default="caller_changed")
+
+    def __post_init__(self):
+        self.payload = {"caller_id": self.caller_id, "caller_name": self.caller_name}
+
+@dataclass
 class ParticipantJoined(AuctionEvent):
     participant_id: int
     name: str
@@ -30,16 +39,18 @@ class ParticipantJoined(AuctionEvent):
 
 @dataclass
 class TurnStarted(AuctionEvent):
+    turn_number: int
+    caller_id: int
     caller_name: str
     type: str = field(init=False, default="turn_started")
 
     def __post_init__(self):
-        self.payload = {"caller": self.caller_name}
+        self.payload = {"caller_name": self.caller_name, "turn_number": self.turn_number, "caller_id": self.caller_id}
 
 
 @dataclass
 class PlayerCalled(AuctionEvent):
-    player_id: str
+    player_id: int
     player_name: str
     role: str
     type: str = field(init=False, default="player_called")
@@ -54,9 +65,9 @@ class PlayerCalled(AuctionEvent):
 
 @dataclass
 class BidPlaced(AuctionEvent):
-    team_id: str
+    team_id: int
     team_name: str
-    amount: int
+    amount: float
     type: str = field(init=False, default="bid_placed")
 
     def __post_init__(self):

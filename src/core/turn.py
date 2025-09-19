@@ -3,22 +3,28 @@ from core.bid import Bid
 from core.bidding_strategies import BiddingStrategy
 from core.caller import Caller
 from core.player import Player
+from core.team import Team
 
 
 class Turn:
-    def __init__(self, number:int, caller:Caller, player:Player, bidding_strategy:BiddingStrategy) -> None:
+    def __init__(self, number:int, caller:Team) -> None:
+        self.number = number
         self.caller = caller
-        self.player = player
-        self.bidding_strategy = bidding_strategy
+        self.player:Optional[Player] = None
+        self.bidding_strategy:Optional[BiddingStrategy] = None
         self.bids:List[Bid] = []
         self.winner:Optional[Bid] = None
+        self.status = "not_started"
     
-    def pass_turn(self):
-        return
+    def skip(self):
+        self.status = "passed"
 
-    def place_bid(self, bid:Bid):
-        #TODO: validazione dell'offerta
+    def call(self, player:Player, amount:float = 0):
+        self.player = player
+        self.status = "in_progress"
+
+    def bid(self, bid:Bid):
+        if self.status != "in_progress":
+            raise Exception("Turn not in progress")
+        
         self.bids.append(bid)
-
-    def close(self):
-        return self.winner
