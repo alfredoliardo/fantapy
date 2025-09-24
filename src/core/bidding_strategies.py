@@ -3,9 +3,12 @@
 import asyncio
 from abc import ABC, abstractmethod
 from typing import List, Optional
+from core.bid import Bid
+from core.bidder import IBidder
 from core.player import Player
 from core.team import Team
 from core.market_rules import MarketRule
+from core.turn import Turn
 
 
 class BiddingStrategy(ABC):
@@ -15,7 +18,7 @@ class BiddingStrategy(ABC):
         self.market_rule = market_rule
 
     @abstractmethod
-    async def run_bidding(self, player: Player, teams: List[Team]) -> Optional[Team]:
+    async def run(self, player: Player, bidders: List[IBidder], turn:Turn) -> Optional[Bid]:
         """Esegue la fase di bidding e restituisce il vincitore (o None)."""
         ...
 
@@ -23,36 +26,29 @@ class BiddingStrategy(ABC):
 # --------------------------------------------------------------------------
 # 1. Offerte libere (rilanci incrementali finché scade il timer)
 # --------------------------------------------------------------------------
+# core/bidding_strategies/free_bidding.py
+
 class FreeBiddingStrategy(BiddingStrategy):
-    def __init__(self, market_rule: MarketRule, countdown_seconds: int = 10):
-        super().__init__(market_rule)
-        self.countdown_seconds = countdown_seconds
+    async def run(self, player: Player, bidders: List[IBidder], turn) -> Optional[Bid]:
+        active = bidders[:]
+        highest_bid = None
 
-    async def run_bidding(self, player, teams):
-        if not self.market_rule.is_available(player):
-            return None
+        while len(active) > 1:
+            for bidder in active[:]:
+                # Qui potrebbe esserci logica async → richiesta via WS o bot decisione
+                amount = bidder.get_bid(player)
 
-        highest = 0
-        winner: Optional[Team] = None
+                if amount is None:
+                    active.remove(bidder)
+                    continue
 
-        # Qui ipotizziamo una logica semplificata:
-        # - ogni bidder risponde in parallelo con una proposta
-        # - prendiamo l'offerta massima
-        # In un sistema reale: countdown, reset ad ogni rilancio, broadcast via WS
-        bids = await asyncio.gather(
-            *[
-                t.bidder.make_bid(highest)
-                for t in teams
-                if t.ownership_policy.can_own(t, player)
-            ]
-        )
+                bid = bidder.place_bid(player, amount)
+                turn.bids.append(bid)
+                if highest_bid is None or bid.amount > highest_bid.amount:
+                    highest_bid = bid
 
-        for team, bid in zip(teams, bids):
-            if bid and bid > highest:
-                highest = bid
-                winner = team
+        return highest_bid
 
-        return winner
 
 
 # --------------------------------------------------------------------------

@@ -1,8 +1,11 @@
-from typing import Dict, List, Optional
+import asyncio
+from typing import Callable, Dict, List, Optional
 from core.bid import Bid
+from core.bidder import IBidder
+from core.caller import ICaller
 from core.calling_strategy.base import CallingStrategy
-from core.calling_strategy.sequential_calling_strategy import SequentialCallingStrategy, SequentialTeamCallingStrategy
-from core.events import BidPlaced, PlayerCalled, TurnStarted
+from core.calling_strategy.sequential_calling_strategy import SequentialTeamCallingStrategy
+from core.events import AuctionEvent, BidPlaced, PlayerCalled, TurnStarted
 from core.interfaces import IHost
 from core.player import Player
 from core.player_pool import PlayerPool
@@ -15,23 +18,54 @@ class Auction:
         self,
         auction_id:str,
         auction_name:str,
-        host:IHost,
         teams:int = 8     
     ) -> None:
     
         self.auction_id = auction_id
         self.name = auction_name
-        self.teams:Dict[int, Team] = self._generate_teams(teams)        
+
+        self.teams:Dict[int, Team] = self._generate_teams(teams)
+
         self.player_pool:PlayerPool = PlayerPool()
 
-
         self.turns:List[Turn] = []
-        self.calling_strategy:CallingStrategy = SequentialTeamCallingStrategy(list(self.teams.values()))
+ 
         self.started = False
 
         self.current_turn:Optional[Turn] = None
+        # lista di callback sottoscritte
+        self._subscribers: Dict[str, List[Callable[[AuctionEvent], None]]] = {}
 
+    def subscribe(self, event_type: str, callback: Callable[[AuctionEvent], None]) -> None:
+        """
+        Sottoscrivi una callback ad un tipo di evento.
+        """
+        if event_type not in self._subscribers:
+            self._subscribers[event_type] = []
+        self._subscribers[event_type].append(callback)
 
+    def unsubscribe(self, event_type: str, callback: Callable[[AuctionEvent], None]) -> None:
+        """
+        Rimuovi una sottoscrizione.
+        """
+        if event_type in self._subscribers:
+            self._subscribers[event_type] = [
+                cb for cb in self._subscribers[event_type] if cb != callback
+            ]
+
+    def _publish(self, event: AuctionEvent) -> None:
+        """
+        Pubblica un evento a tutti i sottoscrittori registrati.
+        """
+        # notifica sottoscrittori specifici per tipo
+        if event.type in self._subscribers:
+            for cb in list(self._subscribers[event.type]):
+                cb(event)
+
+        # notifica sottoscrittori "wildcard" (se registrati con "*")
+        if "*" in self._subscribers:
+            for cb in list(self._subscribers["*"]):
+                cb(event)
 
     def _generate_teams(self, n: int) -> dict[int, Team]:
         return {
@@ -46,37 +80,57 @@ class Auction:
     async def start(self):
         if self.started:
             raise ValueError("Auction already started")
-        
         self.started = True
-        event = TurnStarted(
-            turn_number=self.current_turn.number,
-            caller_id=self.current_turn.caller.id,
-            caller_name=self.current_turn.caller.name
-        )
-        self.current_turn = Turn(
-            number=len(self.turns)+1,
-            caller=self.calling_strategy.next_caller()
-        )
-
-        self._next_turn()
-        self.turns.append(self.current_turn)
+        await self._next_turn()
 
 
         return
     
-    def _next_turn(self):
-        # decide quale team è il chiamante
-        next_team = self.calling_strategy.next_caller()
-        turn = Turn(len(self.turns) + 1,next_team)
+    async def _next_turn(self):
+        # Ottieni i possibili caller dalla strategia
+        callers: List[ICaller] = self.calling_strategy.next_caller()
+        bidders: List[IBidder] = []  # qui popolerai i bidder ammessi
 
-        self.current_turn = turn
+        # Lancia in parallelo la richiesta a tutti i caller
+        tasks = {
+            asyncio.create_task(c.choose_player(self.player_pool.get_available())): c
+            for c in callers
+        }
+
+        # Aspetta il primo che risponde
+        done, pending = await asyncio.wait(
+            tasks.keys(), return_when=asyncio.FIRST_COMPLETED
+        )
+
+        # Prendi il risultato del primo completato
+        first_task = done.pop()
+        chosen_player = first_task.result()
+        chosen_caller = tasks[first_task]
+
+        # Cancella gli altri (non servono più)
+        for task in pending:
+            task.cancel()
+
+        # Chiedi al chiamante la strategia di bidding
+        bidding_strategy = await chosen_caller.choose_bidding_strategy()
+
+        # Crea e avvia il turno
+        turn = Turn(
+            len(self.turns) + 1,
+            chosen_caller,
+            chosen_player,
+            bidders,
+            bidding_strategy,
+        )
+        await turn.start()
+
+        # Salva il turno nella cronologia
         self.turns.append(turn)
+        
 
-    async def call(self, team_id:int, player:Player):
+    async def call(self, player:Player):
         if not self.current_turn:
             raise Exception("Auction not started")
-        if self.current_turn.caller.id != team_id:
-            raise PermissionError("Not this team's turn to call a player")
         self.current_turn.call(player)
 
         event = PlayerCalled(

@@ -27,10 +27,8 @@ class AuctionCreate(BaseModel):
 @router.post("/")
 def create_auction(data: AuctionCreate):
     auction_id = str(uuid.uuid4())
-    auction = Auction(
-        auction_id=auction_id,
-        auction_name=data.name
-    )
+    auction = Auction(auction_id, data.name)
+    
     auctions[auction_id] = AuctionRoom(auction)
 
     return {"auction_id": auction_id, "join_url": f"/auctions/{auction_id}/ws"}
@@ -126,8 +124,6 @@ async def auction_ws(ws: WebSocket, auction_id: str):
                 participant = RemoteParticipant(new_id,nickname, ws)
 
                 auction_room.join(participant)
-
-                
 
                 await ws.send_json({
                     "type": "joined",

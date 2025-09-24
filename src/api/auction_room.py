@@ -6,11 +6,11 @@ from core.auction import Auction
 class AuctionRoom:
     def __init__(self, auction:Auction):
         self.auction = auction
-        self.connections:List[RemoteParticipant] = []
+        self.participants:Dict[str,RemoteParticipant] = {}
         self.team_to_participants:Dict[int, List[RemoteParticipant]] = {}  # team_id -> RemoteParticipant
 
     def join(self, participant:RemoteParticipant):
-        self.connections.append(participant)
+        self.participants[participant.id] = participant
 
     def assign_participant(self, participant:RemoteParticipant, team_id:int):
         if team_id not in self.team_to_participants:
@@ -19,10 +19,10 @@ class AuctionRoom:
     
     async def broadcast(self, message: dict):
         to_remove = []
-        for c in self.connections:
+        for c in self.participants.values():
             try:
                 await c._ws.send_json(message)
             except Exception:
-                to_remove.append(c)
+                to_remove.append(c.id)
         for pid in to_remove:
-            self.connections.remove(pid)
+            self.participants.pop(pid)

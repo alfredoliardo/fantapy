@@ -7,7 +7,7 @@ class Team:
     def __init__(self, id: int, name: str):
         self.id = id
         self.name = name
-        self.president = None  # type: Optional[IParticipant]
+        self.president = None  
         self.budget:float = 500
         self.spent:float= 0
         self.roster: List[Player] = []
