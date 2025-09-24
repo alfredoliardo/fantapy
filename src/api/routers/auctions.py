@@ -83,8 +83,6 @@ async def auction_ws(ws: WebSocket, auction_id: str):
 
     await ws.accept()
     auction_room = auctions[auction_id]
-    auction = auction_room.auction
-
     # Invia subito snapshot iniziale
     snapshot = AuctionRoomDTO(
         auction=AuctionDTO(

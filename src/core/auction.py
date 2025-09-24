@@ -1,22 +1,12 @@
 from typing import Dict, List, Optional
-from core.auctioneer import IAuctioneer
 from core.bid import Bid
-from core.bidding_strategies import BiddingStrategy
-from core.budget_strategies import BudgetStrategy, LimitedBudgetStrategy
-from core.caller import Caller
 from core.calling_strategy.base import CallingStrategy
-from core.calling_strategy.sequential_calling_strategy import SequentialCallingStrategy
-from core.enums import PlayerRole
-from core.events import AuctionEvent, AuctionStarted, BidPlaced, CallerChanged, ParticipantJoined, PlayerCalled, TurnStarted
-from core.market_rules import MarketRule, UniquePlayerMarket
-from core.ownership_policies import NoDuplicatesOwnershipPolicy, OwnershipPolicy
+from core.calling_strategy.sequential_calling_strategy import SequentialCallingStrategy, SequentialTeamCallingStrategy
+from core.events import BidPlaced, PlayerCalled, TurnStarted
+from core.interfaces import IHost
 from core.player import Player
 from core.player_pool import PlayerPool
-from core.player_pool_builders.base import PlayerPoolBuilder
-from core.player_pool_builders.role_sequential_pool_builder import RoleSequentialPoolBuilder
 from core.team import Team
-from core.team_building_strategies.base import TeamBuildingStrategy
-from core.team_building_strategies.fixed_max_strategy import FixedMaxStrategy
 from core.turn import Turn
 
 
@@ -25,6 +15,7 @@ class Auction:
         self,
         auction_id:str,
         auction_name:str,
+        host:IHost,
         teams:int = 8     
     ) -> None:
     
@@ -35,7 +26,7 @@ class Auction:
 
 
         self.turns:List[Turn] = []
-        self.calling_strategy:CallingStrategy = SequentialCallingStrategy(list(self.teams.values()))
+        self.calling_strategy:CallingStrategy = SequentialTeamCallingStrategy(list(self.teams.values()))
         self.started = False
 
         self.current_turn:Optional[Turn] = None
@@ -55,19 +46,21 @@ class Auction:
     async def start(self):
         if self.started:
             raise ValueError("Auction already started")
+        
         self.started = True
-        self._next_turn()
-
-        self.current_turn = Turn(
-            number=len(self.turns)+1,
-            caller=self.calling_strategy.next_caller()
-        )
-        self.turns.append(self.current_turn)
         event = TurnStarted(
             turn_number=self.current_turn.number,
             caller_id=self.current_turn.caller.id,
             caller_name=self.current_turn.caller.name
         )
+        self.current_turn = Turn(
+            number=len(self.turns)+1,
+            caller=self.calling_strategy.next_caller()
+        )
+
+        self._next_turn()
+        self.turns.append(self.current_turn)
+
 
         return
     

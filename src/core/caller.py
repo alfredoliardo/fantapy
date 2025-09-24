@@ -8,7 +8,7 @@ from core.player import Player
 
 
 
-class Caller(ABC):
+class ICaller(ABC):
     """Entità che può chiamare un giocatore all'asta."""
 
     def __init__(self, name: str):
@@ -24,24 +24,5 @@ class Caller(ABC):
 
     @abstractmethod
     async def choose_bidding_strategy(self) -> BiddingStrategy:...
-
-class WebSocketCaller(Caller):
-    def __init__(self, name: str, websocket: WebSocket):
-        super().__init__(name)
-        self.websocket = websocket
-
-    async def choose_player(self, player_pool: List[Player]) -> Optional[Player]:
-        # Mando la richiesta al client remoto
-        await self.websocket.send_json({
-            "type": "choose_player",
-            "options": player_pool
-        })
-        # Aspetto la risposta del client
-        data = await self.websocket.receive_json()
-
-        return data.get("player")
-
-    async def choose_bidding_strategy(self):
-        raise NotImplementedError
 
     

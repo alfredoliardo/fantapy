@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from core.team import Team
-
+from typing import List
+from core.caller import ICaller
 
 class CallingStrategy(ABC):
 
     @abstractmethod
-    def next_caller(self) -> Team:
-        """Restituisce quale team deve chiamare il prossimo giocatore"""
+    def next_caller(self) -> List[ICaller]:
+        """Restituisce l'entità che deve chiamare il prossimo giocatore"""
         pass
