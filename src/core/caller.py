@@ -21,8 +21,3 @@ class ICaller(ABC):
     @abstractmethod
     async def choose_player(self, player_pool:List[Player]) -> Optional[Player]:
         pass
-
-    @abstractmethod
-    async def choose_bidding_strategy(self) -> BiddingStrategy:...
-
-    

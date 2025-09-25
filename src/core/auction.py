@@ -4,10 +4,7 @@ from core.bid import Bid
 from core.bidder import IBidder
 from core.caller import ICaller
 from core.calling_strategy.base import CallingStrategy
-from core.calling_strategy.sequential_calling_strategy import SequentialTeamCallingStrategy
-from core.events import AuctionEvent, BidPlaced, PlayerCalled, TurnStarted
-from core.interfaces import IHost
-from core.player import Player
+from core.events import AuctionEvent, BidPlaced
 from core.player_pool import PlayerPool
 from core.team import Team
 from core.turn import Turn
@@ -111,36 +108,11 @@ class Auction:
         for task in pending:
             task.cancel()
 
-        # Chiedi al chiamante la strategia di bidding
-        bidding_strategy = await chosen_caller.choose_bidding_strategy()
+        # Crea il nuovo turno
+        turn_number = len(self.turns) + 1
 
-        # Crea e avvia il turno
-        turn = Turn(
-            len(self.turns) + 1,
-            chosen_caller,
-            chosen_player,
-            bidders,
-            bidding_strategy,
-        )
-        await turn.start()
-
-        # Salva il turno nella cronologia
-        self.turns.append(turn)
         
 
-    async def call(self, player:Player):
-        if not self.current_turn:
-            raise Exception("Auction not started")
-        self.current_turn.call(player)
-
-        event = PlayerCalled(
-            player_id=player.player_id,
-            player_name=player.name,
-            role=str(player.role.value)
-        )
-
-        return event
-    
     async def bid(self, bid:Bid):
         if not self.current_turn:
             raise Exception("Auction not started")

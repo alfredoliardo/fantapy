@@ -2,7 +2,7 @@ from typing import List, Optional
 from core.bid import Bid
 from core.bidder import IBidder
 from core.bidding_strategies import BiddingStrategy
-from core.caller import Caller, ICaller
+from core.caller import ICaller
 from core.player import Player
 from core.team import Team
 

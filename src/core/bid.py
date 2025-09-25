@@ -7,5 +7,5 @@ from core.team import Team
 @dataclass
 class Bid:
     team: Team
-    amount: int
+    amount: float
     player: Player

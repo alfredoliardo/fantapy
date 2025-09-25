@@ -12,17 +12,13 @@ from core.bid import Bid
 class IBidder(ABC):
     @property
     @abstractmethod
-    def team(self) -> Team:
+    def team(self) -> Optional[Team]:
         """Restituisce la squadra per cui il bidder opera"""
         pass
 
     @abstractmethod
-    def can_bid(self, player: Player, amount: int) -> bool:
-        """Verifica se può rilanciare un'offerta per un giocatore a un certo prezzo"""
-        pass
-    @abstractmethod
-    def get_bid(self, player: Player) -> Optional[float]:
-        """Chiede un eventuale offerta da parte del bidder"""
+    async def get_bid(self, player: Player) -> Optional[float]:
+        """Chiede in modo asincrono un'eventuale offerta da parte del bidder"""
         pass
     @abstractmethod
     def place_bid(self, player: Player, amount: float) -> Bid:

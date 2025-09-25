@@ -8,8 +8,6 @@ from core.bidder import IBidder
 from core.player import Player
 from core.team import Team
 from core.market_rules import MarketRule
-from core.turn import Turn
-
 
 class BiddingStrategy(ABC):
     """Interfaccia astratta per tutte le strategie di bidding."""
@@ -18,7 +16,7 @@ class BiddingStrategy(ABC):
         self.market_rule = market_rule
 
     @abstractmethod
-    async def run(self, player: Player, bidders: List[IBidder], turn:Turn) -> Optional[Bid]:
+    async def run(self, player: Player, bidders: List[IBidder]) -> Optional[Bid]:
         """Esegue la fase di bidding e restituisce il vincitore (o None)."""
         ...
 
@@ -29,21 +27,20 @@ class BiddingStrategy(ABC):
 # core/bidding_strategies/free_bidding.py
 
 class FreeBiddingStrategy(BiddingStrategy):
-    async def run(self, player: Player, bidders: List[IBidder], turn) -> Optional[Bid]:
+    async def run(self, player: Player, bidders: List[IBidder]) -> Optional[Bid]:
         active = bidders[:]
         highest_bid = None
 
         while len(active) > 1:
             for bidder in active[:]:
                 # Qui potrebbe esserci logica async → richiesta via WS o bot decisione
-                amount = bidder.get_bid(player)
+                amount = await bidder.get_bid(player)
 
                 if amount is None:
                     active.remove(bidder)
                     continue
 
                 bid = bidder.place_bid(player, amount)
-                turn.bids.append(bid)
                 if highest_bid is None or bid.amount > highest_bid.amount:
                     highest_bid = bid
 

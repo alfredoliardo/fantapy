@@ -51,6 +51,11 @@
       background: #0056b3;
     }
 
+    .control-button {
+      display: inline-block;
+      margin-top: 1rem;
+    }
+
     #log {
       margin-top: 2rem;
       background: #222;
@@ -75,6 +80,47 @@
       padding: 0;
     }
     li { padding: 4px 0; }
+
+    .draggable-participant {
+      cursor: grab;
+    }
+
+    .draggable-participant:active {
+      cursor: grabbing;
+    }
+
+    .drop-target {
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      padding: 0.5rem;
+      transition: background 0.2s ease, border 0.2s ease;
+      min-height: 70px;
+    }
+
+    .drop-target.drag-over {
+      border: 2px dashed #007bff;
+      background: rgba(0, 123, 255, 0.08);
+    }
+
+    .team-participants {
+      margin-top: 0.5rem;
+    }
+
+    .team-participants li span {
+      display: inline-block;
+      padding: 0.2rem 0.4rem;
+      background: #eef5ff;
+      border-radius: 4px;
+      color: #0b3d91;
+    }
+
+    #turn-info {
+      margin-top: 1rem;
+      padding: 1rem;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      background: #fafafa;
+    }
   </style>
 </head>
 <body>
@@ -99,6 +145,15 @@
       <input id="join-nickname" type="text" placeholder="Il tuo nome">
       <button onclick="joinAuction()">Unisciti</button>
     </div>
+
+    <!-- Aste Disponibili -->
+    <div class="card">
+      <h2>Aste Disponibili</h2>
+      <label>Nickname</label>
+      <input id="available-nickname" type="text" placeholder="Il tuo nome">
+      <button onclick="fetchAuctions()" style="margin-bottom:0.5rem;">Aggiorna elenco</button>
+      <ul id="auction-list"></ul>
+    </div>
   </div>
 
   <!-- Snapshot -->
@@ -106,6 +161,13 @@
     <h2>Asta: <span id="auctionName"></span></h2>
     <p><strong>Caller attuale:</strong> <span id="caller">-</span></p>
     <p><strong>Giocatore corrente:</strong> <span id="player">-</span></p>
+    <button id="start-btn" class="control-button" onclick="startAuction()" disabled>Avvia Asta</button>
+    <div id="turn-info" style="display:none;">
+      <h3>Turno Corrente</h3>
+      <p><strong>Round:</strong> <span id="turn-round">-</span></p>
+      <p><strong>Squadra:</strong> <span id="turn-team">-</span></p>
+      <p><strong>Partecipanti:</strong> <span id="turn-participants">-</span></p>
+    </div>
   </div>
 
   <!-- Partecipanti -->
@@ -125,7 +187,15 @@
   <script>
     const API_BASE = "http://127.0.0.1:8000/auctions";
     let ws = null;
+    let selfParticipantId = null;
     let participants = [];
+    let teamsState = [];
+    let availableAuctions = [];
+    let currentAuctionId = null;
+    let currentNickname = "";
+    let auctionStarted = false;
+    let currentTurn = { status: "idle" };
+    let draggedParticipantId = null;
 
     function log(msg) {
       const logBox = document.getElementById("log");
@@ -133,36 +203,173 @@
       logBox.scrollTop = logBox.scrollHeight;
     }
 
+    function parsePayload(payload) {
+      if (typeof payload === "string") {
+        try {
+          return JSON.parse(payload);
+        } catch (err) {
+          return payload;
+        }
+      }
+      return payload || {};
+    }
+
+    function getTeamNameById(teamId) {
+      const team = teamsState.find(t => t.id === teamId);
+      return team ? team.name : `Team ${teamId}`;
+    }
+
     function renderParticipants() {
       const ul = document.getElementById("participants-list");
       ul.innerHTML = "";
       participants.forEach(p => {
         const li = document.createElement("li");
-        li.textContent = `${p.name} (id: ${p.id})`;
+        li.classList.add("draggable-participant");
+        li.draggable = true;
+        li.dataset.participantId = p.id;
+        const assignedNames = (p.assigned_teams || [])
+          .map(teamId => getTeamNameById(parseInt(teamId, 10)))
+          .join(", ");
+        const assignmentLabel = assignedNames ? ` → ${assignedNames}` : "";
+        const selfSuffix = selfParticipantId === p.id ? " (tu)" : "";
+        li.textContent = `${p.name} (id: ${p.id})${assignmentLabel}${selfSuffix}`;
+        li.addEventListener("dragstart", handleParticipantDragStart);
+        li.addEventListener("dragend", handleParticipantDragEnd);
         ul.appendChild(li);
       });
     }
 
     function renderTeams(teams) {
-      console.log(teams)
       const div = document.getElementById("teams-list");
       div.innerHTML = "";
       teams.forEach(team => {
         const card = document.createElement("div");
-        card.style.border = "1px solid #ddd";
-        card.style.margin = "0.5rem 0";
-        card.style.padding = "0.5rem";
+        card.classList.add("drop-target");
+        card.dataset.teamId = team.id;
+        card.addEventListener("dragover", handleTeamDragOver);
+        card.addEventListener("dragenter", handleTeamDragEnter);
+        card.addEventListener("dragleave", handleTeamDragLeave);
+        card.addEventListener("drop", handleTeamDrop);
+
+        const players = (team.players || []).map(p => `${p.name} (${p.role})`).join(", ") || "Nessuno";
         card.innerHTML = `
           <strong>${team.name}</strong> - Budget: ${team.budget}<br>
-          Giocatori: ${team.players.map(p => `${p.name} (${p.role})`).join(", ") || "Nessuno"}
+          Giocatori: ${players}<br>
+          <em>Trascina un partecipante qui per assegnarlo</em>
         `;
+
+        const list = document.createElement("ul");
+        list.className = "team-participants";
+        const assigned = team.participants || [];
+        if (assigned.length === 0) {
+          const empty = document.createElement("li");
+          empty.textContent = "Nessun partecipante assegnato";
+          list.appendChild(empty);
+        } else {
+          assigned.forEach(part => {
+            const li = document.createElement("li");
+            const chip = document.createElement("span");
+            chip.textContent = part.name;
+            li.appendChild(chip);
+            list.appendChild(li);
+          });
+        }
+
+        card.appendChild(list);
         div.appendChild(card);
       });
     }
 
+    function handleParticipantDragStart(event) {
+      draggedParticipantId = event.currentTarget.dataset.participantId;
+      event.dataTransfer.setData("text/plain", draggedParticipantId);
+      event.dataTransfer.effectAllowed = "move";
+    }
+
+    function handleParticipantDragEnd() {
+      draggedParticipantId = null;
+      document.querySelectorAll(".drop-target.drag-over").forEach(el => el.classList.remove("drag-over"));
+    }
+
+    function handleTeamDragOver(event) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    }
+
+    function handleTeamDragEnter(event) {
+      event.preventDefault();
+      event.currentTarget.classList.add("drag-over");
+    }
+
+    function handleTeamDragLeave(event) {
+      event.currentTarget.classList.remove("drag-over");
+    }
+
+    function handleTeamDrop(event) {
+      event.preventDefault();
+      const card = event.currentTarget;
+      card.classList.remove("drag-over");
+      const participantId = draggedParticipantId || event.dataTransfer.getData("text/plain");
+      if (!participantId) {
+        return;
+      }
+      const teamId = parseInt(card.dataset.teamId, 10);
+      assignParticipantToTeam(participantId, teamId);
+      draggedParticipantId = null;
+    }
+
+    function renderAvailableAuctions() {
+      const list = document.getElementById("auction-list");
+      if (!list) return;
+      list.innerHTML = "";
+      availableAuctions.forEach(auction => {
+        const li = document.createElement("li");
+        const joined = auction.auction_id === currentAuctionId;
+        const statusLabel = auction.started ? " [attiva]" : "";
+        li.textContent = `${auction.name} (${auction.auction_id})${joined ? " [connesso]" : statusLabel}`;
+        const joinBtn = document.createElement("button");
+        joinBtn.textContent = joined ? "Connesso" : "Unisciti";
+        joinBtn.style.marginLeft = "0.5rem";
+        joinBtn.disabled = joined;
+        joinBtn.onclick = () => joinAvailableAuction(auction.auction_id);
+        li.appendChild(joinBtn);
+        list.appendChild(li);
+      });
+    }
+
+    async function fetchAuctions() {
+      try {
+        const res = await fetch(API_BASE + "/");
+        if (!res.ok) {
+          throw new Error(`Errore HTTP ${res.status}`);
+        }
+        availableAuctions = await res.json();
+        renderAvailableAuctions();
+      } catch (err) {
+        log("Errore durante il recupero delle aste: " + err.message);
+      }
+    }
+
+    function joinAvailableAuction(auctionId) {
+      const nicknameInput = document.getElementById("available-nickname");
+      const nickname = nicknameInput.value.trim();
+      if (!nickname) {
+        alert("Inserisci un nickname per unirti all'asta.");
+        return;
+      }
+      document.getElementById("join-nickname").value = nickname;
+      document.getElementById("join-id").value = auctionId;
+      joinAuction();
+    }
+
     async function createAuction() {
-      const name = document.getElementById("create-name").value;
-      const nickname = document.getElementById("create-nickname").value;
+      const name = document.getElementById("create-name").value.trim();
+      const nickname = document.getElementById("create-nickname").value.trim();
+
+      if (!name || !nickname) {
+        alert("Inserisci nome dell'asta e nickname.");
+        return;
+      }
 
       const res = await fetch(API_BASE + "/", {
         method: "POST",
@@ -175,18 +382,215 @@
         })
       });
 
+      if (!res.ok) {
+        const errText = await res.text();
+        log("Errore nella creazione dell'asta: " + errText);
+        return;
+      }
+
       const data = await res.json();
       log("Asta creata con ID: " + data.auction_id);
+      document.getElementById("join-id").value = data.auction_id;
+      document.getElementById("join-nickname").value = nickname;
       connectWS(data.auction_id, nickname);
+      fetchAuctions();
     }
 
     function joinAuction() {
-      const auctionId = document.getElementById("join-id").value;
-      const nickname = document.getElementById("join-nickname").value;
+      const auctionId = document.getElementById("join-id").value.trim();
+      const nickname = document.getElementById("join-nickname").value.trim();
+      if (!auctionId || !nickname) {
+        alert("Inserisci sia l'ID dell'asta che il nickname.");
+        return;
+      }
       connectWS(auctionId, nickname);
     }
 
+    function resetAuctionState() {
+      participants = [];
+      teamsState = [];
+      auctionStarted = false;
+      currentTurn = { status: "idle" };
+      renderParticipants();
+      renderTeams([]);
+      document.getElementById("snapshot").style.display = "none";
+      document.getElementById("auctionName").innerText = "";
+      document.getElementById("caller").innerText = "-";
+      document.getElementById("player").innerText = "-";
+      updateTurnInfo();
+      updateControls();
+    }
+
+    function updateTurnInfo() {
+      const panel = document.getElementById("turn-info");
+      const turnRound = document.getElementById("turn-round");
+      const turnTeam = document.getElementById("turn-team");
+      const turnParticipants = document.getElementById("turn-participants");
+
+      if (!panel) return;
+
+      if (!auctionStarted && (!currentTurn || currentTurn.status === "idle")) {
+        panel.style.display = "none";
+        turnRound.innerText = "-";
+        turnTeam.innerText = "-";
+        turnParticipants.innerText = "-";
+        document.getElementById("caller").innerText = "-";
+        document.getElementById("player").innerText = "-";
+        return;
+      }
+
+      panel.style.display = "block";
+      const status = currentTurn.status || "in attesa";
+      turnRound.innerText = status;
+
+      if (status === "waiting_player") {
+        const callerNames = (currentTurn.callers || []).map(c => c.name).join(", ") || "-";
+        document.getElementById("caller").innerText = callerNames;
+        document.getElementById("player").innerText = "-";
+        turnTeam.innerText = callerNames;
+        turnParticipants.innerText = "In attesa della chiamata";
+      } else if (status === "player_selected") {
+        const callerName = currentTurn.caller?.name || "-";
+        const playerName = currentTurn.player?.name || "-";
+        document.getElementById("caller").innerText = callerName;
+        document.getElementById("player").innerText = playerName;
+        turnTeam.innerText = callerName;
+        turnParticipants.innerText = "Giocatore selezionato";
+      } else if (status === "bidding") {
+        const playerName = currentTurn.player?.name || "-";
+        document.getElementById("player").innerText = playerName;
+        document.getElementById("caller").innerText = currentTurn.caller?.name || "-";
+        turnTeam.innerText = "Offerte in corso";
+        const bidders = (currentTurn.bidders || []).map(b => b.name).join(", ") || "-";
+        turnParticipants.innerText = `Partecipanti: ${bidders}`;
+      } else if (status === "completed") {
+        const winner = currentTurn.winner ? `${currentTurn.winner.name} (${currentTurn.winner.team_name || ""})` : "-";
+        document.getElementById("player").innerText = currentTurn.player?.name || "-";
+        document.getElementById("caller").innerText = currentTurn.caller?.name || "-";
+        turnTeam.innerText = winner;
+        turnParticipants.innerText = `Aggiudicato per ${currentTurn.amount}`;
+      } else if (status === "no_bids") {
+        document.getElementById("player").innerText = currentTurn.player?.name || "-";
+        document.getElementById("caller").innerText = currentTurn.caller?.name || "-";
+        turnTeam.innerText = "Nessuna offerta";
+        turnParticipants.innerText = "Il giocatore torna nel pool";
+      } else if (status === "paused") {
+        turnTeam.innerText = "Asta in pausa";
+        turnParticipants.innerText = currentTurn.reason || "-";
+      } else if (status === "finished") {
+        turnTeam.innerText = "Asta conclusa";
+        turnParticipants.innerText = currentTurn.reason || "-";
+      }
+    }
+
+    function updateControls() {
+      const startBtn = document.getElementById("start-btn");
+      if (!startBtn) return;
+      const hasAssignments = teamsState.some(team => (team.participants || []).length > 0);
+      startBtn.disabled = !currentAuctionId || auctionStarted || !hasAssignments;
+    }
+
+    async function assignParticipantToTeam(participantId, teamId) {
+      if (!currentAuctionId) {
+        alert("Connettiti prima ad un'asta.");
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/${currentAuctionId}/assign`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ participant_id: participantId, team_id: teamId })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const detail = err.detail || "Errore durante l'assegnazione";
+          alert(detail);
+        }
+      } catch (err) {
+        log("Errore durante l'assegnazione: " + err.message);
+      }
+    }
+
+    async function startAuction() {
+      if (!currentAuctionId) {
+        alert("Connettiti prima ad un'asta.");
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE}/${currentAuctionId}/start`, {
+          method: "POST"
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const detail = err.detail || "Impossibile avviare l'asta";
+          alert(detail);
+          return;
+        }
+        auctionStarted = true;
+        updateControls();
+        updateTurnInfo();
+      } catch (err) {
+        log("Errore durante l'avvio dell'asta: " + err.message);
+      }
+    }
+
+    function handleChoosePlayerRequest(message) {
+      if (!selfParticipantId) {
+        selfParticipantId = message.participant_id || selfParticipantId;
+      }
+      const options = (message.player_pool || []).map(p => `${p.player_id} - ${p.name} (${p.role})`).join("
+") || "Nessun giocatore disponibile";
+      const answer = window.prompt(`Scegli il giocatore da chiamare:
+${options}`);
+      const playerId = answer ? parseInt(answer, 10) : null;
+      ws.send(JSON.stringify({
+        type: "choose_player_response",
+        participant_id: selfParticipantId || message.participant_id,
+        request_id: message.request_id,
+        player_id: Number.isFinite(playerId) ? playerId : null
+      }));
+    }
+
+    function handleBidRequest(message) {
+      if (!selfParticipantId) {
+        selfParticipantId = message.participant_id || selfParticipantId;
+      }
+      const player = message.player || {};
+      const promptText = `Offerta per ${player.name || "il giocatore"} (${player.role || ""})
+Inserisci l'importo (lascia vuoto per passare):`;
+      const answer = window.prompt(promptText);
+      const amount = answer && answer.trim() !== "" ? parseFloat(answer) : null;
+      ws.send(JSON.stringify({
+        type: "place_bid_response",
+        participant_id: selfParticipantId || message.participant_id,
+        request_id: message.request_id,
+        amount: Number.isFinite(amount) ? amount : null
+      }));
+    }
+
+    function handleStrategyRequest(message) {
+      if (!selfParticipantId) {
+        selfParticipantId = message.participant_id || selfParticipantId;
+      }
+      ws.send(JSON.stringify({
+        type: "choose_bidding_strategy_response",
+        participant_id: selfParticipantId || message.participant_id,
+        request_id: message.request_id,
+        strategy: "free"
+      }));
+    }
+
     function connectWS(auctionId, nickname) {
+      if (ws) {
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.close();
+      }
+
+      currentAuctionId = auctionId;
+      currentNickname = nickname;
+      resetAuctionState();
+
       ws = new WebSocket(`ws://127.0.0.1:8000/auctions/${auctionId}/ws`);
 
       ws.onopen = () => {
@@ -199,34 +603,154 @@
 
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
+        const payload = msg.payload !== undefined ? parsePayload(msg.payload) : undefined;
         log("WS → " + JSON.stringify(msg));
-        data = JSON.parse(msg.payload)
-        if (msg.type === "auction_snapshot") {
-          document.getElementById("snapshot").style.display = "block";
-          document.getElementById("auctionName").innerText = data.name;
-          document.getElementById("caller").innerText = data.current_caller || "-";
-          document.getElementById("player").innerText = data.current_player || "-";
 
-          participants = data.participants.map((name, idx) => ({ id: idx+1, name }));
-          renderParticipants();
-          renderTeams(data.teams);
-        }
+        switch (msg.type) {
+          case "auction_snapshot": {
+            if (!payload || !payload.auction) {
+              break;
+            }
+            document.getElementById("snapshot").style.display = "block";
+            const { auction, participants: snapshotParticipants } = payload;
+            auctionStarted = Boolean(auction.started);
+            document.getElementById("auctionName").innerText = auction.name;
+            document.getElementById("caller").innerText = auction.current_caller || "-";
+            document.getElementById("player").innerText = auction.current_player || "-";
 
-        if (msg.type === "participant_joined") {
-          participants.push(data);
-          renderParticipants();
-        }
-
-        if (msg.type === "participant_left") {
-          participants = participants.filter(p => p.id !== data.id);
-          renderParticipants();
+            participants = (snapshotParticipants || []).map(part => ({
+              id: part.id,
+              name: part.name,
+              assigned_teams: part.assigned_teams || []
+            }));
+            teamsState = auction.teams || [];
+            renderParticipants();
+            renderTeams(teamsState);
+            updateControls();
+            updateTurnInfo();
+            fetchAuctions();
+            break;
+          }
+          case "joined": {
+            if (msg.payload && msg.payload.id) {
+              selfParticipantId = msg.payload.id;
+            }
+            break;
+          }
+          case "auction_started": {
+            auctionStarted = true;
+            currentTurn = { status: "waiting_player" };
+            updateControls();
+            updateTurnInfo();
+            break;
+          }
+          case "turn_waiting_for_player": {
+            currentTurn = {
+              status: "waiting_player",
+              callers: msg.payload?.callers || [],
+              player_pool: msg.payload?.player_pool || []
+            };
+            updateTurnInfo();
+            break;
+          }
+          case "player_selected": {
+            currentTurn = {
+              ...currentTurn,
+              status: "player_selected",
+              caller: msg.payload?.caller,
+              player: msg.payload?.player
+            };
+            updateTurnInfo();
+            break;
+          }
+          case "bidding_started": {
+            currentTurn = {
+              ...currentTurn,
+              status: "bidding",
+              bidders: msg.payload?.bidders || [],
+              player: msg.payload?.player || currentTurn.player,
+            };
+            updateTurnInfo();
+            break;
+          }
+          case "bidding_result": {
+            if (msg.payload?.status === "won") {
+              currentTurn = {
+                ...currentTurn,
+                status: "completed",
+                winner: msg.payload?.winner,
+                amount: msg.payload?.amount,
+                player: msg.payload?.player || currentTurn.player,
+              };
+            } else {
+              currentTurn = {
+                ...currentTurn,
+                status: "no_bids",
+                player: msg.payload?.player || currentTurn.player,
+              };
+            }
+            updateTurnInfo();
+            break;
+          }
+          case "auction_finished": {
+            auctionStarted = false;
+            currentTurn = { status: "finished", reason: msg.payload?.reason };
+            updateControls();
+            updateTurnInfo();
+            break;
+          }
+          case "auction_paused": {
+            auctionStarted = false;
+            currentTurn = { status: "paused", reason: msg.payload?.reason };
+            updateControls();
+            updateTurnInfo();
+            break;
+          }
+          case "participant_joined": {
+            if (msg.payload && msg.payload.id) {
+              participants = participants.filter(p => p.id !== msg.payload.id);
+              participants.push({
+                id: msg.payload.id,
+                name: msg.payload.name,
+                assigned_teams: msg.payload.assigned_teams || []
+              });
+              renderParticipants();
+            }
+            break;
+          }
+          case "choose_player_request":
+            handleChoosePlayerRequest(msg);
+            break;
+          case "place_bid_request":
+            handleBidRequest(msg);
+            break;
+          case "choose_bidding_strategy_request":
+            handleStrategyRequest(msg);
+            break;
+          default:
+            break;
         }
       };
 
       ws.onclose = () => {
         log("Connessione WS chiusa");
+        ws = null;
+        currentAuctionId = null;
+        auctionStarted = false;
+        currentTurn = { status: "idle" };
+        updateControls();
+        updateTurnInfo();
+        renderAvailableAuctions();
       };
     }
-  </script>
+
+    window.addEventListener("load", () => {
+      fetchAuctions();
+      renderParticipants();
+      renderTeams([]);
+      updateControls();
+      updateTurnInfo();
+    });
+</script>
 </body>
 </html>

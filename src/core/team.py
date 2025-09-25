@@ -30,6 +30,8 @@ class Team:
         for p in self.roster:
             grouped.setdefault(p.role, []).append(p)
         return grouped
+    def can_afford(self, amount: float) -> bool:
+        return (self.budget - self.spent) >= amount
 
     def __repr__(self) -> str:
         return f"<Team {self.name} spent={self.spent} size={len(self.roster)}>"
